@@ -86,6 +86,7 @@ func (s *BatchContract) Commit(ctx contractapi.TransactionContextInterface, comm
 	}
 	defer iter.Close()
 	var count uint32 = 0
+	state := NewBatchState(ctx.GetStub())
 	for iter.HasNext() {
 		res, err := iter.Next()
 		if err != nil {
@@ -95,8 +96,7 @@ func (s *BatchContract) Commit(ctx contractapi.TransactionContextInterface, comm
 		if err := json.Unmarshal(res.Value, &msg); err != nil {
 			return err
 		}
-		// TODO it must keep provisional state in batch
-		if err := s.executeMsg(ctx, msg); err != nil {
+		if err := s.executeMsg(ctx, state, msg); err != nil {
 			return err
 		}
 		// cleanup
@@ -107,6 +107,9 @@ func (s *BatchContract) Commit(ctx contractapi.TransactionContextInterface, comm
 		if s.TotalQueryLimit <= count {
 			return fmt.Errorf("the number of results must be less than `TotalQueryLimit` %v: count=%v", s.TotalQueryLimit, count)
 		}
+	}
+	if err := state.Commit(); err != nil {
+		return err
 	}
 	if err := setCommit(ctx, commitTime); err != nil {
 		return err
@@ -134,15 +137,24 @@ func (s *BatchContract) authenticateMsg(ctx contractapi.TransactionContextInterf
 	return s.Authenticator(ctx, msg)
 }
 
-func (s *BatchContract) executeMsg(ctx contractapi.TransactionContextInterface, msg Msg) error {
+func (s *BatchContract) executeMsg(ctx contractapi.TransactionContextInterface, state *BatchState, msg Msg) error {
 	fn, ok := s.FnRegistry[msg.Fn]
 	if !ok {
 		return fmt.Errorf("fnName '%v' not found in the registry", msg.Fn)
 	}
-	// TODO
-	// - fix an error handling: if err != nil, it must discard changes
-	// - wrap the state API (or context?)
-	return fn(ctx, msg.Args)
+	tmp := ctx.(*contractapi.TransactionContext)
+	tctx := *tmp
+	tctx.SetStub(state)
+	if err := fn(&tctx, msg.Args); err != nil {
+		if err := state.RevertMsg(); err != nil {
+			return err
+		}
+	} else {
+		if err := state.CommitMsg(); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 /// State accessors ///
