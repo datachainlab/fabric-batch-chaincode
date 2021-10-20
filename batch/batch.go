@@ -25,12 +25,14 @@ type BatchContract struct {
 	FnRegistry    map[string]Fn
 
 	// parameters for the batch algorithm
-	TotalQueryLimit uint32
-	TimeGapAllwance int64
-	GetNodeTime     func() int64
+	TotalQueryLimit        uint32
+	MsgTimeGapAllowance    int64
+	CommitTimeGapAllowance int64
+
+	GetNodeTime func(stub shim.ChaincodeStubInterface) int64
 }
 
-var DefaultGetNodeTime = func() int64 {
+var DefaultGetNodeTime = func(stub shim.ChaincodeStubInterface) int64 {
 	return time.Now().Unix()
 }
 
@@ -51,7 +53,7 @@ func (s *BatchContract) SubmitMsg(ctx contractapi.TransactionContextInterface, m
 	}
 
 	// Validate a gap between `currentTime` and node time
-	if err := validateCurrentTimestamp(currentTime, s.GetNodeTime(), s.TimeGapAllwance); err != nil {
+	if err := validateCurrentTimestamp(currentTime, s.GetNodeTime(ctx.GetStub()), s.MsgTimeGapAllowance); err != nil {
 		return err
 	}
 
@@ -69,7 +71,7 @@ func (s *BatchContract) SubmitMsg(ctx contractapi.TransactionContextInterface, m
 
 // Commit executes Msg submitted between the last commit time and `commitTime`.
 func (s *BatchContract) Commit(ctx contractapi.TransactionContextInterface, commitTime int64) error {
-	if err := validateCommitTime(commitTime, s.GetNodeTime(), s.TimeGapAllwance); err != nil {
+	if err := validateCommitTime(commitTime, s.GetNodeTime(ctx.GetStub()), s.CommitTimeGapAllowance); err != nil {
 		return err
 	}
 	lct, err := getLastCommittedTime(ctx)

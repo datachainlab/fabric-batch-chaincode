@@ -15,9 +15,10 @@ func main() {
 		FnRegistry:    map[string]batch.Fn{},
 		Authenticator: batch.DefaultAuthenticator,
 
-		TotalQueryLimit: 100000,
-		TimeGapAllwance: 5,
-		GetNodeTime:     batch.DefaultGetNodeTime,
+		TotalQueryLimit:        100000,
+		MsgTimeGapAllowance:    16,
+		CommitTimeGapAllowance: 0, // for test
+		GetNodeTime:            batch.DefaultGetNodeTime,
 	}
 	contract := chaincode.NewSmartContract(batchcc)
 	chaincode, err := contractapi.NewChaincode(contract)
