@@ -84,6 +84,15 @@ func (s *SmartContract) BatchIncr(ctx contractapi.TransactionContextInterface, c
 	}, tm.GetSeconds())
 }
 
+func (s *SmartContract) BatchIncrWithTimestamp(ctx contractapi.TransactionContextInterface, count uint64, currentTime int64) error {
+	return s.BatchContract.SubmitMsg(ctx, batch.Msg{
+		Fn: MsgIncr,
+		Args: [][]byte{
+			[]byte(fmt.Sprint(count)),
+		},
+	}, currentTime)
+}
+
 func (s *SmartContract) incrMsg(ctx contractapi.TransactionContextInterface, args [][]byte) error {
 	if len(args) != 1 {
 		return errors.New("args length must be 1")
@@ -95,17 +104,13 @@ func (s *SmartContract) incrMsg(ctx contractapi.TransactionContextInterface, arg
 	return s.Incr(ctx, uint64(count))
 }
 
-func (s *SmartContract) BatchDecr(ctx contractapi.TransactionContextInterface, count uint64) error {
-	tm, err := ctx.GetStub().GetTxTimestamp()
-	if err != nil {
-		return err
-	}
+func (s *SmartContract) BatchDecrWithTimestamp(ctx contractapi.TransactionContextInterface, count uint64, currentTime int64) error {
 	return s.BatchContract.SubmitMsg(ctx, batch.Msg{
 		Fn: MsgDecr,
 		Args: [][]byte{
 			[]byte(fmt.Sprint(count)),
 		},
-	}, tm.GetSeconds())
+	}, currentTime)
 }
 
 func (s *SmartContract) decrMsg(ctx contractapi.TransactionContextInterface, args [][]byte) error {
