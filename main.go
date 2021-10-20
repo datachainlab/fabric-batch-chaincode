@@ -16,7 +16,7 @@ func main() {
 		Authenticator: batch.DefaultAuthenticator,
 
 		TotalQueryLimit: 100000,
-		TimeGapAllwance: 10,
+		TimeGapAllwance: 5,
 		GetNodeTime:     batch.DefaultGetNodeTime,
 	}
 	contract := chaincode.NewSmartContract(batchcc)
