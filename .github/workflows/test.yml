@@ -18,3 +18,6 @@ jobs:
 
     - name: Setup
       run: make minifab && sudo make minifab-init && make minifab-up
+
+    - name: Test
+      run: sudo make testapp && ./minifab apprun
