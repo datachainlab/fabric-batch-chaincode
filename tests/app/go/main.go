@@ -4,11 +4,17 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
+	"github.com/hyperledger/fabric-protos-go/peer"
+	"github.com/hyperledger/fabric-sdk-go/pkg/client/channel/invoke"
+	"github.com/hyperledger/fabric-sdk-go/pkg/common/errors/status"
+	"github.com/hyperledger/fabric-sdk-go/pkg/common/providers/fab"
 	"github.com/hyperledger/fabric-sdk-go/pkg/core/config"
 	"github.com/hyperledger/fabric-sdk-go/pkg/gateway"
+	"github.com/pkg/errors"
 )
 
 const (
@@ -18,6 +24,9 @@ const (
 	orgAdmin  = "Admin"
 )
 
+// this test case ensures:
+// - succeed to submit Msgs concurrently
+// - theses Msgs are committed and its counter matches expected value
 func testConcurrentSubmitMsg() {
 	contract := getContract()
 	beforeCount, err := getCount(contract)
@@ -58,6 +67,58 @@ func testConcurrentSubmitMsg() {
 	}
 	if beforeCount+100 != afterCount {
 		panic(fmt.Sprintf("%v != %v", beforeCount+100, afterCount))
+	}
+}
+
+// this test case ensures:
+// - failed to submit a Msg referencing a committed time-range
+func testCommitSafety() {
+	contract := getContract()
+
+	beforeCount, err := getCount(contract)
+	if err != nil {
+		panic(err)
+	}
+	msgTime := time.Now().Add(-time.Second)
+
+	tx, err := contract.CreateTransaction("BatchIncrWithTimestamp")
+	if err != nil {
+		panic(err)
+	}
+	var wg sync.WaitGroup
+	for i := 0; i < 100; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, err := tx.SimulateWithHandler(delaySubmitHandler{5 * time.Second}, "1", fmt.Sprint(msgTime.Unix()))
+			if err == nil {
+				panic("must be failed")
+			} else if !strings.Contains(err.Error(), "PHANTOM_READ_CONFLICT") {
+				panic(err)
+			}
+		}()
+	}
+	commitTime := msgTime
+	_, err = contract.SubmitTransaction("Commit", fmt.Sprint(commitTime.Unix()))
+	if err != nil {
+		panic(fmt.Sprintf("Failed to commit transaction: commitTime=%v err=%v\n", commitTime.Unix(), err))
+	}
+	wg.Wait()
+
+	var afterCount int64
+	for i := 0; i < 5; i++ {
+		// if err is not nil, the endorsers may not have synchronized their states yet.
+		afterCount, err = getCount(contract)
+		if err == nil {
+			break
+		}
+		time.Sleep(time.Second)
+	}
+	if err != nil {
+		panic(err)
+	}
+	if beforeCount != afterCount {
+		panic(fmt.Sprintf("%v != %v", beforeCount, afterCount))
 	}
 }
 
@@ -108,6 +169,61 @@ func getCount(contract *gateway.Contract) (int64, error) {
 	return int64(count), nil
 }
 
+type delaySubmitHandler struct {
+	delay time.Duration
+}
+
+func (h delaySubmitHandler) Handle(requestContext *invoke.RequestContext, clientContext *invoke.ClientContext) {
+	txnID := requestContext.Response.TransactionID
+
+	//Register Tx event
+	reg, statusNotifier, err := clientContext.EventService.RegisterTxStatusEvent(string(txnID)) // TODO: Change func to use TransactionID instead of string
+	if err != nil {
+		requestContext.Error = errors.Wrap(err, "error registering for TxStatus event")
+		return
+	}
+	defer clientContext.EventService.Unregister(reg)
+	time.Sleep(h.delay)
+	_, err = createAndSendTransaction(clientContext.Transactor, requestContext.Response.Proposal, requestContext.Response.Responses)
+	if err != nil {
+		requestContext.Error = errors.Wrap(err, "CreateAndSendTransaction failed")
+		return
+	}
+
+	select {
+	case txStatus := <-statusNotifier:
+		requestContext.Response.TxValidationCode = txStatus.TxValidationCode
+
+		if txStatus.TxValidationCode != peer.TxValidationCode_VALID {
+			requestContext.Error = status.New(status.EventServerStatus, int32(txStatus.TxValidationCode),
+				"received invalid transaction", nil)
+			return
+		}
+	case <-requestContext.Ctx.Done():
+		requestContext.Error = status.New(status.ClientStatus, status.Timeout.ToInt32(),
+			"Execute didn't receive block event", nil)
+		return
+	}
+}
+
+func createAndSendTransaction(sender fab.Sender, proposal *fab.TransactionProposal, resps []*fab.TransactionProposalResponse) (*fab.TransactionResponse, error) {
+	txnRequest := fab.TransactionRequest{
+		Proposal:          proposal,
+		ProposalResponses: resps,
+	}
+	tx, err := sender.CreateTransaction(txnRequest)
+	if err != nil {
+		return nil, errors.WithMessage(err, "CreateTransaction failed")
+	}
+	transactionResponse, err := sender.SendTransaction(tx)
+	if err != nil {
+		return nil, errors.WithMessage(err, "SendTransaction failed")
+
+	}
+	return transactionResponse, nil
+}
+
 func main() {
 	testConcurrentSubmitMsg()
+	testCommitSafety()
 }
