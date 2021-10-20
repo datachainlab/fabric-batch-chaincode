@@ -19,39 +19,7 @@ const (
 )
 
 func testConcurrentSubmitMsg() {
-	wallet, err := gateway.NewFileSystemWallet("./wallets")
-	if err != nil {
-		fmt.Printf("Failed to create wallet: %s\n", err)
-		os.Exit(1)
-	}
-
-	if !wallet.Exists("Admin") {
-		fmt.Println("Failed to get Admin from wallet")
-		os.Exit(1)
-	}
-
-	gw, err := gateway.Connect(
-		gateway.WithConfig(config.FromFile("./connection.json")),
-		gateway.WithIdentity(wallet, "Admin"),
-	)
-
-	if err != nil {
-		fmt.Printf("Failed to connect: %v", err)
-		os.Exit(1)
-	}
-
-	if gw == nil {
-		fmt.Println("Failed to create gateway")
-		os.Exit(1)
-	}
-
-	network, err := gw.GetNetwork(channelID)
-	if err != nil {
-		fmt.Printf("Failed to get network: %v", err)
-		os.Exit(1)
-	}
-
-	contract := network.GetContract(ccID)
+	contract := getContract()
 	beforeCount, err := getCount(contract)
 	if err != nil {
 		panic(err)
@@ -91,6 +59,41 @@ func testConcurrentSubmitMsg() {
 	if beforeCount+100 != afterCount {
 		panic(fmt.Sprintf("%v != %v", beforeCount+100, afterCount))
 	}
+}
+
+func getContract() *gateway.Contract {
+	wallet, err := gateway.NewFileSystemWallet("./wallets")
+	if err != nil {
+		fmt.Printf("Failed to create wallet: %s\n", err)
+		os.Exit(1)
+	}
+
+	if !wallet.Exists("Admin") {
+		fmt.Println("Failed to get Admin from wallet")
+		os.Exit(1)
+	}
+
+	gw, err := gateway.Connect(
+		gateway.WithConfig(config.FromFile("./connection.json")),
+		gateway.WithIdentity(wallet, "Admin"),
+	)
+
+	if err != nil {
+		fmt.Printf("Failed to connect: %v", err)
+		os.Exit(1)
+	}
+
+	if gw == nil {
+		fmt.Println("Failed to create gateway")
+		os.Exit(1)
+	}
+
+	network, err := gw.GetNetwork(channelID)
+	if err != nil {
+		fmt.Printf("Failed to get network: %v", err)
+		os.Exit(1)
+	}
+	return network.GetContract(ccID)
 }
 
 func getCount(contract *gateway.Contract) (int64, error) {

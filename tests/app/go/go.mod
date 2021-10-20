@@ -1,10 +1,10 @@
 module github.com/fabricgoapp
 
-replace github.com/fabricgoapp => ../
+go 1.15
 
-require (
-	github.com/google/uuid v1.1.2 // indirect
-	github.com/hyperledger/fabric-sdk-go v1.0.0-beta3
+require github.com/hyperledger/fabric-sdk-go v1.0.0-beta3
+
+replace (
+	github.com/fabricgoapp => ../
+	github.com/hyperledger/fabric-sdk-go => github.com/datachainlab/fabric-sdk-go v1.0.0-beta2.0.20211020062434-ea4fb5be7a93
 )
-
-go 1.13
