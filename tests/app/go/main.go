@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"strconv"
 	"sync"
 	"time"
 
@@ -11,7 +12,7 @@ import (
 )
 
 const (
-	ccID      = "samplecc"
+	ccID      = "counter"
 	channelID = "mychannel"
 	orgName   = "org1.example.com"
 	orgAdmin  = "Admin"
@@ -50,40 +51,56 @@ func useWalletGateway() {
 		os.Exit(1)
 	}
 
-	network, err := gw.GetNetwork("mychannel")
+	network, err := gw.GetNetwork(channelID)
 	if err != nil {
 		fmt.Printf("Failed to get network: %v", err)
 		os.Exit(1)
 	}
 
-	contract := network.GetContract("counter")
-
-	tick := time.NewTicker(time.Second)
-	for i := 0; i < 10; i++ {
-		<-tick.C
-		msgTime := time.Now()
-		commitTime := msgTime.Add(time.Second)
-
-		var wg sync.WaitGroup
+	contract := network.GetContract(ccID)
+	beforeCount, err := getCount(contract)
+	if err != nil {
+		panic(err)
+	}
+	var wg sync.WaitGroup
+	for i := 0; i < 100; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			_, err := contract.SubmitTransaction("Commit", fmt.Sprint(i), fmt.Sprint(commitTime.Unix()))
+			_, err = contract.SubmitTransaction("BatchIncrWithTimestamp", "1", fmt.Sprint(time.Now().Unix()))
 			if err != nil {
-				fmt.Printf("Failed to commit transaction: %v\n", err)
-				os.Exit(1)
+				panic(fmt.Sprintf("Failed to commit transaction %v", err))
 			}
 		}()
-		go func() {
-			defer wg.Done()
-			_, err := contract.SubmitTransaction("BatchIncrWithTimestamp", "1", fmt.Sprint(msgTime.Unix()))
-			if err == nil {
-				fmt.Printf("Failed to commit transaction: %v\n", err)
-				os.Exit(1)
-			}
-		}()
-		wg.Wait()
 	}
+	wg.Wait()
+	now := time.Now()
+	time.Sleep(6 * time.Second)
+
+	_, err = contract.SubmitTransaction("Commit", fmt.Sprint(now.Unix()))
+	if err != nil {
+		panic(fmt.Sprintf("Failed to commit transaction: commitTime=%v err=%v\n", now.Unix(), err))
+	}
+
+	afterCount, err := getCount(contract)
+	if err != nil {
+		panic(err)
+	}
+	if beforeCount+100 != afterCount {
+		panic(fmt.Sprintf("%v != %v", beforeCount+100, afterCount))
+	}
+}
+
+func getCount(contract *gateway.Contract) (int64, error) {
+	v, err := contract.EvaluateTransaction("count")
+	if err != nil {
+		return 0, err
+	}
+	count, err := strconv.Atoi(string(v))
+	if err != nil {
+		return 0, err
+	}
+	return int64(count), nil
 }
 
 func main() {
