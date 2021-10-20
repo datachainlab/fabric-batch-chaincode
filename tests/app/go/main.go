@@ -18,13 +18,7 @@ const (
 	orgAdmin  = "Admin"
 )
 
-/*
-To run this app, make sure that one of the wallet files such as Admin.id from
-vars/profiles/vscode/wallets directory is copied onto ./wallets directory,
-then this example code will use the wallet file and connection file to make
-connections to Fabric network
-*/
-func useWalletGateway() {
+func testConcurrentSubmitMsg() {
 	wallet, err := gateway.NewFileSystemWallet("./wallets")
 	if err != nil {
 		fmt.Printf("Failed to create wallet: %s\n", err)
@@ -75,7 +69,7 @@ func useWalletGateway() {
 	}
 	wg.Wait()
 	now := time.Now()
-	time.Sleep(6 * time.Second)
+	time.Sleep(time.Second)
 
 	_, err = contract.SubmitTransaction("Commit", fmt.Sprint(now.Unix()))
 	if err != nil {
@@ -112,5 +106,5 @@ func getCount(contract *gateway.Contract) (int64, error) {
 }
 
 func main() {
-	useWalletGateway()
+	testConcurrentSubmitMsg()
 }
