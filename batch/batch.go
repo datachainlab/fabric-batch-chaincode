@@ -1,7 +1,6 @@
 package batch
 
 import (
-	"crypto/sha256"
 	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
@@ -180,8 +179,7 @@ func addMsg(ctx contractapi.TransactionContextInterface, currentTime int64, msg 
 	if err != nil {
 		return err
 	}
-	h := sha256.Sum256(bz)
-	return ctx.GetStub().PutState(makeMsgKey(currentTime, h[:]), bz)
+	return ctx.GetStub().PutState(makeMsgKey(currentTime, ctx.GetStub().GetTxID()), bz)
 }
 
 func setCommit(ctx contractapi.TransactionContextInterface, currentTime int64) error {
@@ -220,7 +218,7 @@ func validateCommitTime(commitTime int64, nodeTime int64, timeGapAllowance int64
 	if commitTime < nodeTime-timeGapAllowance {
 		return nil
 	}
-	return fmt.Errorf("commit is not ready")
+	return fmt.Errorf("commit is not ready: commitTime=%v nodeTime=%v timeGapAllowance=%v", commitTime, nodeTime, timeGapAllowance)
 }
 
 /// Utility functions ///
@@ -231,8 +229,8 @@ func makeMsgPrefixKey(timestamp int64) string {
 	return fmt.Sprintf("%v/%v/", msgKeyPrefix, hex.EncodeToString(bz))
 }
 
-func makeMsgKey(timestamp int64, msgHash []byte) string {
-	return makeMsgPrefixKey(timestamp) + hex.EncodeToString(msgHash)
+func makeMsgKey(timestamp int64, txID string) string {
+	return makeMsgPrefixKey(timestamp) + txID
 }
 
 func makeMsgRangeKey(start, end int64) (string, string) {
