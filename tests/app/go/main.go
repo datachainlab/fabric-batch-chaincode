@@ -82,7 +82,15 @@ func useWalletGateway() {
 		panic(fmt.Sprintf("Failed to commit transaction: commitTime=%v err=%v\n", now.Unix(), err))
 	}
 
-	afterCount, err := getCount(contract)
+	var afterCount int64
+	for i := 0; i < 5; i++ {
+		// if err is not nil, the endorsers may not have synchronized their states yet.
+		afterCount, err = getCount(contract)
+		if err == nil {
+			break
+		}
+		time.Sleep(time.Second)
+	}
 	if err != nil {
 		panic(err)
 	}
