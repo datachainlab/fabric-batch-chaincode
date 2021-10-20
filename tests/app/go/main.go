@@ -48,20 +48,16 @@ func testConcurrentSubmitMsg() {
 	now := time.Now()
 	time.Sleep(time.Second)
 
-	_, err = contract.SubmitTransaction("Commit", fmt.Sprint(now.Unix()))
+	countBytes, err := contract.SubmitTransaction("Commit", fmt.Sprint(now.Unix()))
 	if err != nil {
 		panic(fmt.Sprintf("Failed to commit transaction: commitTime=%v err=%v\n", now.Unix(), err))
 	}
-
-	var afterCount int64
-	for i := 0; i < 5; i++ {
-		// if err is not nil, the endorsers may not have synchronized their states yet.
-		afterCount, err = getCount(contract)
-		if err == nil {
-			break
-		}
-		time.Sleep(time.Second)
+	num := mustParseInt64(string(countBytes))
+	if num != 100 {
+		panic(fmt.Sprintf("unexpected commit number: %v", num))
 	}
+
+	afterCount, err := getCount(contract)
 	if err != nil {
 		panic(err)
 	}
@@ -99,21 +95,17 @@ func testCommitSafety() {
 		}()
 	}
 	commitTime := msgTime
-	_, err = contract.SubmitTransaction("Commit", fmt.Sprint(commitTime.Unix()))
+	countBytes, err := contract.SubmitTransaction("Commit", fmt.Sprint(commitTime.Unix()))
 	if err != nil {
 		panic(fmt.Sprintf("Failed to commit transaction: commitTime=%v err=%v\n", commitTime.Unix(), err))
 	}
+	num := mustParseInt64(string(countBytes))
+	if num != 0 {
+		panic(fmt.Sprintf("unexpected commit number: %v", num))
+	}
 	wg.Wait()
 
-	var afterCount int64
-	for i := 0; i < 5; i++ {
-		// if err is not nil, the endorsers may not have synchronized their states yet.
-		afterCount, err = getCount(contract)
-		if err == nil {
-			break
-		}
-		time.Sleep(time.Second)
-	}
+	afterCount, err := getCount(contract)
 	if err != nil {
 		panic(err)
 	}
@@ -158,15 +150,25 @@ func getContract() *gateway.Contract {
 }
 
 func getCount(contract *gateway.Contract) (int64, error) {
-	v, err := contract.EvaluateTransaction("count")
-	if err != nil {
-		return 0, err
+	var v []byte
+	var err error
+	for i := 0; i < 5; i++ {
+		// if err is not nil, the endorsers may not have synchronized their states yet.
+		v, err = contract.EvaluateTransaction("count")
+		if err == nil {
+			return mustParseInt64(string(v)), nil
+		}
+		time.Sleep(time.Second)
 	}
-	count, err := strconv.Atoi(string(v))
+	return 0, err
+}
+
+func mustParseInt64(s string) int64 {
+	count, err := strconv.Atoi(s)
 	if err != nil {
-		return 0, err
+		panic(err)
 	}
-	return int64(count), nil
+	return int64(count)
 }
 
 type delaySubmitHandler struct {

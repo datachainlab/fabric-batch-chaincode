@@ -70,52 +70,55 @@ func (s *BatchContract) SubmitMsg(ctx contractapi.TransactionContextInterface, m
 }
 
 // Commit executes Msg submitted between the last commit time and `commitTime`.
-func (s *BatchContract) Commit(ctx contractapi.TransactionContextInterface, commitTime int64) error {
+func (s *BatchContract) Commit(ctx contractapi.TransactionContextInterface, commitTime int64) (int64, error) {
 	if err := validateCommitTime(commitTime, s.GetNodeTime(ctx.GetStub()), s.CommitTimeGapAllowance); err != nil {
-		return err
+		return 0, err
 	}
 	lct, err := getLastCommittedTime(ctx)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	if commitTime <= lct {
-		return fmt.Errorf("commit %v has already committed: lct=%v", commitTime, lct)
+		return 0, fmt.Errorf("commit %v has already committed: lct=%v", commitTime, lct)
 	}
 	iter, err := ctx.GetStub().GetStateByRange(makeMsgRangeKey(lct, commitTime))
 	if err != nil {
-		return err
+		return 0, err
 	}
 	defer iter.Close()
-	var count uint32 = 0
+	var count int64 = 0
 	state := NewBatchState(ctx.GetStub())
 	for iter.HasNext() {
 		res, err := iter.Next()
 		if err != nil {
-			return err
+			return 0, err
 		}
 		var msg Msg
 		if err := json.Unmarshal(res.Value, &msg); err != nil {
-			return err
+			return 0, err
 		}
 		if err := s.executeMsg(ctx, state, msg); err != nil {
-			return err
+			return 0, err
 		}
 		// cleanup
 		if err := ctx.GetStub().DelState(res.Key); err != nil {
-			return err
+			return 0, err
 		}
 		count++
-		if s.TotalQueryLimit <= count {
-			return fmt.Errorf("the number of results must be less than `TotalQueryLimit` %v: count=%v", s.TotalQueryLimit, count)
+		if int64(s.TotalQueryLimit) <= count {
+			return 0, fmt.Errorf("the number of results must be less than `TotalQueryLimit` %v: count=%v", s.TotalQueryLimit, count)
 		}
 	}
 	if err := state.Commit(); err != nil {
-		return err
+		return 0, err
 	}
 	if err := setCommit(ctx, commitTime); err != nil {
-		return err
+		return 0, err
 	}
-	return setLastCommittedTime(ctx, commitTime)
+	if err := setLastCommittedTime(ctx, commitTime); err != nil {
+		return 0, err
+	}
+	return count, nil
 }
 
 /// API for subclass ///
