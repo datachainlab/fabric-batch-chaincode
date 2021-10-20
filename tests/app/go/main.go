@@ -58,23 +58,32 @@ func useWalletGateway() {
 
 	contract := network.GetContract("counter")
 
-	var wg sync.WaitGroup
-	start := time.Now()
-	for i := 1; i <= 10; i++ {
+	tick := time.NewTicker(time.Second)
+	for i := 0; i < 10; i++ {
+		<-tick.C
+		msgTime := time.Now()
+		commitTime := msgTime.Add(time.Second)
+
+		var wg sync.WaitGroup
 		wg.Add(1)
-		go func(i int) {
+		go func() {
 			defer wg.Done()
-			result, err := contract.SubmitTransaction("BatchIncrWithTimestamp", fmt.Sprint(i))
+			_, err := contract.SubmitTransaction("Commit", fmt.Sprint(i), fmt.Sprint(commitTime.Unix()))
 			if err != nil {
-				panic(fmt.Sprintf("Failed to commit transaction: %v", err))
-			} else {
-				fmt.Println("Commit is successful")
+				fmt.Printf("Failed to commit transaction: %v\n", err)
+				os.Exit(1)
 			}
-			fmt.Printf("The results is %v", result)
-		}(i)
+		}()
+		go func() {
+			defer wg.Done()
+			_, err := contract.SubmitTransaction("BatchIncrWithTimestamp", "1", fmt.Sprint(msgTime.Unix()))
+			if err == nil {
+				fmt.Printf("Failed to commit transaction: %v\n", err)
+				os.Exit(1)
+			}
+		}()
+		wg.Wait()
 	}
-	wg.Wait()
-	fmt.Println("The time took is ", time.Now().Sub(start))
 }
 
 func main() {
