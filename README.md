@@ -53,6 +53,13 @@ This will recheck for the existence of the commit logs during the validation pha
 
 The above points and (2) guarantees (3) under the assumption that an actor performs `Commit`.
 
+## TODO
+
+- [ ] Implement ChaincodeStubInterface for BatchState
+- [ ] Design for Msg authentication
+- [ ] Enhance integration with fabric-contract-api-go
+  - It should be possible to integrate it into an existing chaincode implementation with a few modifications
+
 ## Maintainers
 
 - [Jun Kimura](https://github.com/bluele)
