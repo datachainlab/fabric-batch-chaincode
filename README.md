@@ -1,5 +1,8 @@
 # Fabric-Batch-Chaincode
 
+![Test](https://github.com/datachainlab/fabric-batch-chaincode/workflows/Test/badge.svg)
+[![GoDoc](https://godoc.org/github.com/datachainlab/fabric-batch-chaincode?status.svg)](https://pkg.go.dev/github.com/datachainlab/fabric-batch-chaincode?tab=doc)
+
 Fabric-Batch-Chaincode (FBC) is a library that enables batch transactions in chaincode without additional trusted systems.
 
 ## Overview
