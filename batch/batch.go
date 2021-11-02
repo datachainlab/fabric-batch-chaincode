@@ -20,14 +20,15 @@ const (
 	commitKeyPrefix      = "commit/"
 )
 
+// BatchContract implements on-chain batch logic without trusted third party
 type BatchContract struct {
 	Authenticator Authenticator
 	FnRegistry    map[string]Fn
 
 	// parameters for the batch algorithm
-	TotalQueryLimit        uint32
-	MsgTimeGapAllowance    int64
-	CommitTimeGapAllowance int64
+	TotalQueryLimit        uint32 // the value should be match `totalQueryLimit` in core.yaml
+	MsgTimeGapAllowance    int64  // the value indicates current time window when Msg is submitted
+	CommitTimeGapAllowance int64  // the value indicates current time window when Commit is executed
 
 	// GetPeerTime returns current time on peer
 	GetPeerTime func(stub shim.ChaincodeStubInterface) int64
@@ -111,7 +112,7 @@ func (s *BatchContract) Commit(ctx contractapi.TransactionContextInterface, comm
 			return 0, fmt.Errorf("the number of results must be less than `TotalQueryLimit` %v: count=%v", s.TotalQueryLimit, count)
 		}
 	}
-	if err := state.Commit(); err != nil {
+	if err := state.Apply(); err != nil {
 		return 0, err
 	}
 	if err := setCommit(ctx, commitTime); err != nil {
@@ -125,6 +126,7 @@ func (s *BatchContract) Commit(ctx contractapi.TransactionContextInterface, comm
 
 /// API for subclass ///
 
+// RegisterFn registers a given function
 func (s *BatchContract) RegisterFn(fnName string, fn Fn) error {
 	if _, ok := s.FnRegistry[fnName]; ok {
 		return fmt.Errorf("fnName '%v' already exists in the registry", fnName)
@@ -133,6 +135,7 @@ func (s *BatchContract) RegisterFn(fnName string, fn Fn) error {
 	return nil
 }
 
+// GetIgnoredFunctions implements contractapi.IgnoreContractInterface
 func (s *BatchContract) GetIgnoredFunctions() []string {
 	return []string{"RegisterFn", "SubmitMsg"}
 }
@@ -272,19 +275,24 @@ func newTransactionContext(stub shim.ChaincodeStubInterface) (contractapi.Transa
 
 /// Msg definitions ///
 
-type Fn func(contractapi.TransactionContextInterface, [][]byte) error
+// Fn defines a function to process Msg
+type Fn func(ctx contractapi.TransactionContextInterface, args [][]byte) error
 
-type Authenticator func(contractapi.TransactionContextInterface, Msg) error
+// Authenticator defines an authenticator that authenticates a given msg with a transaction context
+type Authenticator func(ctx contractapi.TransactionContextInterface, msg Msg) error
 
+// DefaultAuthenticator ...
 func DefaultAuthenticator(ctx contractapi.TransactionContextInterface, msg Msg) error {
 	return nil
 }
 
+// Msg is a chaincode invocation
 type Msg struct {
 	Fn   string
 	Args [][]byte
 }
 
+// Validate validates the msg
 func (msg Msg) Validate() error {
 	if msg.Fn == "" {
 		return errors.New("Fn must be non-empty")

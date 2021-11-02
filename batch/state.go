@@ -6,6 +6,7 @@ import (
 	pb "github.com/hyperledger/fabric-protos-go/peer"
 )
 
+// BatchState manages a state in a batch execution
 type BatchState struct {
 	stub shim.ChaincodeStubInterface
 
@@ -21,6 +22,7 @@ const (
 
 var _ shim.ChaincodeStubInterface = (*BatchState)(nil)
 
+// NewBatchState returns a new BatchState
 func NewBatchState(stub shim.ChaincodeStubInterface) *BatchState {
 	return &BatchState{
 		stub:        stub,
@@ -29,6 +31,7 @@ func NewBatchState(stub shim.ChaincodeStubInterface) *BatchState {
 	}
 }
 
+// CommitMsg commits the provisional state
 func (s *BatchState) CommitMsg() error {
 	for k, v := range s.provisional {
 		if v == nil {
@@ -41,12 +44,14 @@ func (s *BatchState) CommitMsg() error {
 	return nil
 }
 
+// RevertMsg discards the provisional state
 func (s *BatchState) RevertMsg() error {
 	s.provisional = make(map[string][]byte)
 	return nil
 }
 
-func (s *BatchState) Commit() error {
+// Apply applies the committed state to the state DB
+func (s *BatchState) Apply() error {
 	for k, v := range s.committed {
 		switch v[0] {
 		case prefixCache:
