@@ -18,7 +18,7 @@ func main() {
 		TotalQueryLimit:        100000,
 		MsgTimeGapAllowance:    16,
 		CommitTimeGapAllowance: 0, // for test
-		GetNodeTime:            batch.DefaultGetNodeTime,
+		GetPeerTime:            batch.DefaultGetPeerTime,
 	}
 	contract := chaincode.NewSmartContract(batchcc)
 	chaincode, err := contractapi.NewChaincode(contract)

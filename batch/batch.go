@@ -29,10 +29,12 @@ type BatchContract struct {
 	MsgTimeGapAllowance    int64
 	CommitTimeGapAllowance int64
 
-	GetNodeTime func(stub shim.ChaincodeStubInterface) int64
+	// GetPeerTime returns current time on peer
+	GetPeerTime func(stub shim.ChaincodeStubInterface) int64
 }
 
-var DefaultGetNodeTime = func(stub shim.ChaincodeStubInterface) int64 {
+// DefaultGetPeerTime uses local clock in peer
+func DefaultGetPeerTime(stub shim.ChaincodeStubInterface) int64 {
 	return time.Now().Unix()
 }
 
@@ -53,7 +55,7 @@ func (s *BatchContract) SubmitMsg(ctx contractapi.TransactionContextInterface, m
 	}
 
 	// Validate a gap between `currentTime` and node time
-	if err := validateCurrentTimestamp(currentTime, s.GetNodeTime(ctx.GetStub()), s.MsgTimeGapAllowance); err != nil {
+	if err := validateCurrentTimestamp(currentTime, s.GetPeerTime(ctx.GetStub()), s.MsgTimeGapAllowance); err != nil {
 		return err
 	}
 
@@ -71,7 +73,7 @@ func (s *BatchContract) SubmitMsg(ctx contractapi.TransactionContextInterface, m
 
 // Commit executes Msg submitted between the last commit time and `commitTime`.
 func (s *BatchContract) Commit(ctx contractapi.TransactionContextInterface, commitTime int64) (int64, error) {
-	if err := validateCommitTime(commitTime, s.GetNodeTime(ctx.GetStub()), s.CommitTimeGapAllowance); err != nil {
+	if err := validateCommitTime(commitTime, s.GetPeerTime(ctx.GetStub()), s.CommitTimeGapAllowance); err != nil {
 		return 0, err
 	}
 	lct, err := getLastCommittedTime(ctx)
